@@ -25,6 +25,7 @@ import {
   handleStatsCommand,
   handleCallbackQuery,
   handleAskCommand,
+  handleMentionAsk,
 } from './src/handlers.js';
 import { TelegramMessage, ConversationRecord, BotConfig } from './src/types.js';
 import { logger } from './src/logger.js';
@@ -143,6 +144,25 @@ bot.on('message', async (ctx: Context) => {
   } catch (error) {
     logger.error('Error processing message:', error);
   }
+});
+
+/**
+ * Respond to @mentions in groups/channels
+ */
+bot.on('message', async (ctx, next) => {
+  if (
+    (ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup' || ctx.chat?.type === 'channel') &&
+    ctx.message?.entities?.some(
+      (e) =>
+        e.type === 'mention' &&
+        ctx.message.text?.substring(e.offset, e.offset + e.length).toLowerCase() ===
+          (ctx.me?.username ? `@${ctx.me.username}`.toLowerCase() : '')
+    )
+  ) {
+    await handleMentionAsk(ctx);
+    return;
+  }
+  return next();
 });
 
 /**

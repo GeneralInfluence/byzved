@@ -1,37 +1,38 @@
-import { fetchMessages } from './supabase.js';
-import { buildOpenAIPrompt, sendPromptToOpenAI } from './embeddings.js';
+import { fetchMessages } from "./supabase.js";
+import { buildOpenAIPrompt, sendPromptToOpenAI } from "./embeddings.js";
 /**
- * Handle /ask command in private chat to answer questions about a group/channel
- * Usage: /ask <group_id> <question>
+ * Handle /ask command in private chat to answer questions about all groups/channels/chats
+ * Usage: /ask <question>
  */
 export async function handleAskCommand(ctx: Context): Promise<void> {
   try {
     // Only allow in private chats
-    if (ctx.chat.type !== 'private') {
-      logger.debug(`[ASK] Rejected: not private chat. chat.type=${ctx.chat.type}`);
-      await ctx.reply('❌ Please use this command in a private chat with the bot.');
+    if (ctx.chat.type !== "private") {
+      logger.debug(
+        `[ASK] Rejected: not private chat. chat.type=${ctx.chat.type}`
+      );
+      await ctx.reply(
+        "❌ Please use this command in a private chat with the bot."
+      );
       return;
     }
 
-    const text = ctx.message?.text || '';
+    const text = ctx.message?.text || "";
     logger.debug(`[ASK] Received text: '${text}'`);
-    // Accepts: /ask <group_id> <question> (robust to extra spaces)
-    // const match = text.match(/^\/ask\s+(\d{5,})\s+([\s\S]+)/i);
-    const match = text.match(/^\/ask\s+(-?\d+)\s+([\s\S]+)/i);
+    // Accepts: /ask <question>
+    const match = text.match(/^\/ask\s+([\s\S]+)/i);
     if (!match) {
       logger.debug(`[ASK] Regex did not match. text='${text}'`);
-      await ctx.reply('Usage: /ask <group_id> <your question>');
+      await ctx.reply("Usage: /ask <your question>");
       return;
     }
-    const groupId = parseInt(match[1], 10);
-    const userQuestion = match[2].trim();
-    logger.debug(`[ASK] groupId=${groupId}, userQuestion='${userQuestion}'`);
+    const userQuestion = match[1].trim();
 
-    // Fetch recent messages from the group/channel
-    const messages = await fetchMessages({ groupId, limit: 20 });
+    // Fetch recent messages from all groups/channels/chats
+    const messages = await fetchMessages({ limit: 50 }); // No groupId filter
     if (!messages.length) {
-      logger.debug(`[ASK] No messages found for groupId=${groupId}`);
-      await ctx.reply('No messages found for that group/channel.');
+      logger.debug(`[ASK] No messages found`);
+      await ctx.reply("No messages found.");
       return;
     }
 
@@ -43,8 +44,47 @@ export async function handleAskCommand(ctx: Context): Promise<void> {
 
     await ctx.reply(answer);
   } catch (error) {
-    logger.error('Error in handleAskCommand:', error);
-    await ctx.reply('❌ An error occurred. Please try again.');
+    logger.error("Error in handleAskCommand:", error);
+    await ctx.reply("❌ An error occurred. Please try again.");
+  }
+}
+
+/**
+ * Handle @mention ask in group/channel: considers only messages from that chat
+ * Usage: @BotUsername <question>
+ */
+export async function handleMentionAsk(ctx: Context): Promise<void> {
+  try {
+    // Only allow in group/channel/supergroup
+    if (!['group', 'supergroup', 'channel'].includes(ctx.chat.type)) {
+      return;
+    }
+    const text = ctx.message?.text || "";
+    const botUsername = ctx.me?.username ? `@${ctx.me.username}` : "";
+    // Find @mention entity for the bot
+    const mentionEntity = ctx.message?.entities?.find(
+      (e) => e.type === "mention" && text.substring(e.offset, e.offset + e.length).toLowerCase() === botUsername.toLowerCase()
+    );
+    if (!mentionEntity) return;
+    // Extract question after the mention
+    const question = text.slice(mentionEntity.offset + mentionEntity.length).trim();
+    if (!question) {
+      await ctx.reply("Please ask a question after mentioning me.");
+      return;
+    }
+    // Fetch recent messages from this group/channel only
+    const messages = await fetchMessages({ groupId: ctx.chat.id, limit: 50 });
+    if (!messages.length) {
+      await ctx.reply("No messages found for this group/channel.");
+      return;
+    }
+    // Build prompt and query OpenAI
+    const prompt = buildOpenAIPrompt(messages, question);
+    const answer = await sendPromptToOpenAI(prompt);
+    await ctx.reply(answer);
+  } catch (error) {
+    logger.error("Error in handleMentionAsk:", error);
+    await ctx.reply("❌ An error occurred. Please try again.");
   }
 }
 
@@ -53,10 +93,10 @@ export async function handleAskCommand(ctx: Context): Promise<void> {
  * Manages all inline keyboard callbacks and menu navigation
  */
 
-import { Context, InlineKeyboard } from 'grammy';
-import { getMessageCount } from './supabase.js';
-import { areEmbeddingsAvailable, getEmbeddingsProvider } from './embeddings.js';
-import { logger } from './logger.js';
+import { Context, InlineKeyboard } from "grammy";
+import { getMessageCount } from "./supabase.js";
+import { areEmbeddingsAvailable, getEmbeddingsProvider } from "./embeddings.js";
+import { logger } from "./logger.js";
 
 /**
  * Create the main menu keyboard
@@ -64,13 +104,13 @@ import { logger } from './logger.js';
  */
 export function getMainMenuKeyboard(): InlineKeyboard {
   return new InlineKeyboard()
-    .text('📊 Statistics', 'stats')
-    .text('ℹ️ About', 'about')
+    .text("📊 Statistics", "stats")
+    .text("ℹ️ About", "about")
     .row()
-    .text('🛡️ Privacy', 'privacy')
-    .text('🗑️ Clear Chats', 'clear_chats')
+    .text("🛡️ Privacy", "privacy")
+    .text("🗑️ Clear Chats", "clear_chats")
     .row()
-    .text('❌ Opt Out', 'optout');
+    .text("❌ Opt Out", "optout");
 }
 
 /**
@@ -93,13 +133,13 @@ export async function handleStartCommand(ctx: Context): Promise<void> {
         `• You can opt-out anytime\n\n` +
         `Choose an option below or use commands:`,
       {
-        parse_mode: 'HTML',
+        parse_mode: "HTML",
         reply_markup: keyboard,
       }
     );
   } catch (error) {
-    logger.error('Error in handleStartCommand:', error);
-    await ctx.reply('❌ An error occurred. Please try again.');
+    logger.error("Error in handleStartCommand:", error);
+    await ctx.reply("❌ An error occurred. Please try again.");
   }
 }
 
@@ -111,23 +151,23 @@ export async function handleOptoutCommand(ctx: Context): Promise<void> {
   try {
     const userId = ctx.from?.id;
     if (!userId) {
-      await ctx.reply('❌ Could not determine your user ID.');
+      await ctx.reply("❌ Could not determine your user ID.");
       return;
     }
 
     const keyboard = new InlineKeyboard()
-      .text('✅ Yes, opt out', 'confirm_optout')
-      .text('❌ Cancel', 'cancel');
+      .text("✅ Yes, opt out", "confirm_optout")
+      .text("❌ Cancel", "cancel");
 
     await ctx.reply(
-      '⚠️ Are you sure you want to opt out? Your future messages will no longer be collected.',
+      "⚠️ Are you sure you want to opt out? Your future messages will no longer be collected.",
       {
         reply_markup: keyboard,
       }
     );
   } catch (error) {
-    logger.error('Error in handleOptoutCommand:', error);
-    await ctx.reply('❌ An error occurred. Please try again.');
+    logger.error("Error in handleOptoutCommand:", error);
+    await ctx.reply("❌ An error occurred. Please try again.");
   }
 }
 
@@ -141,20 +181,20 @@ export async function handleStatsCommand(ctx: Context): Promise<void> {
     const provider = getEmbeddingsProvider();
     const embeddingsStatus = areEmbeddingsAvailable()
       ? `✅ Enabled (${provider})`
-      : '⚠️ Disabled';
+      : "⚠️ Disabled";
 
     await ctx.reply(
       `📊 <b>Bot Statistics</b>\n\n` +
         `Total messages ingested: <code>${count}</code>\n` +
         `Embeddings: ${embeddingsStatus}`,
       {
-        parse_mode: 'HTML',
-        reply_markup: new InlineKeyboard().text('🔙 Back to Menu', 'main_menu'),
+        parse_mode: "HTML",
+        reply_markup: new InlineKeyboard().text("🔙 Back to Menu", "main_menu"),
       }
     );
   } catch (error) {
-    logger.error('Error in handleStatsCommand:', error);
-    await ctx.reply('❌ An error occurred. Please try again.');
+    logger.error("Error in handleStatsCommand:", error);
+    await ctx.reply("❌ An error occurred. Please try again.");
   }
 }
 
@@ -167,45 +207,45 @@ export async function handleCallbackQuery(ctx: Context): Promise<void> {
   const data = ctx.callbackQuery?.data;
 
   if (!data) {
-    await ctx.answerCallbackQuery('❌ Unknown action');
+    await ctx.answerCallbackQuery("❌ Unknown action");
     return;
   }
 
   try {
     switch (data) {
-      case 'stats':
+      case "stats":
         await handleStatsCallback(ctx);
         break;
-      case 'about':
+      case "about":
         await handleAboutCallback(ctx);
         break;
-      case 'privacy':
+      case "privacy":
         await handlePrivacyCallback(ctx);
         break;
-      case 'optout':
+      case "optout":
         await handleOptoutCallback(ctx);
         break;
-      case 'confirm_optout':
+      case "confirm_optout":
         await handleConfirmOptoutCallback(ctx);
         break;
-      case 'clear_chats':
+      case "clear_chats":
         await handleClearChatsCallback(ctx);
         break;
-      case 'confirm_clear_chats':
+      case "confirm_clear_chats":
         await handleConfirmClearChatsCallback(ctx);
         break;
-      case 'cancel':
+      case "cancel":
         await handleCancelCallback(ctx);
         break;
-      case 'main_menu':
+      case "main_menu":
         await handleMainMenuCallback(ctx);
         break;
       default:
-        await ctx.answerCallbackQuery('❌ Unknown action');
+        await ctx.answerCallbackQuery("❌ Unknown action");
     }
   } catch (error) {
-    logger.error('Error handling callback query:', error);
-    await ctx.answerCallbackQuery('❌ An error occurred');
+    logger.error("Error handling callback query:", error);
+    await ctx.answerCallbackQuery("❌ An error occurred");
   }
 }
 
@@ -219,18 +259,18 @@ async function handleStatsCallback(ctx: Context): Promise<void> {
   const provider = getEmbeddingsProvider();
   const embeddingsStatus = areEmbeddingsAvailable()
     ? `✅ Enabled (${provider})`
-    : '⚠️ Disabled';
+    : "⚠️ Disabled";
 
   await ctx.editMessageText(
     `📊 <b>Bot Statistics</b>\n\n` +
       `Total messages ingested: <code>${count}</code>\n` +
       `Embeddings: ${embeddingsStatus}`,
     {
-      parse_mode: 'HTML',
-      reply_markup: new InlineKeyboard().text('🔙 Back to Menu', 'main_menu'),
+      parse_mode: "HTML",
+      reply_markup: new InlineKeyboard().text("🔙 Back to Menu", "main_menu"),
     }
   );
-  await ctx.answerCallbackQuery('📊 Statistics updated');
+  await ctx.answerCallbackQuery("📊 Statistics updated");
 }
 
 /**
@@ -251,11 +291,11 @@ async function handleAboutCallback(ctx: Context): Promise<void> {
       `• Opt-out support\n\n` +
       `<b>Status:</b> Active & Running ✅`,
     {
-      parse_mode: 'HTML',
-      reply_markup: new InlineKeyboard().text('🔙 Back to Menu', 'main_menu'),
+      parse_mode: "HTML",
+      reply_markup: new InlineKeyboard().text("🔙 Back to Menu", "main_menu"),
     }
   );
-  await ctx.answerCallbackQuery('ℹ️ About info loaded');
+  await ctx.answerCallbackQuery("ℹ️ About info loaded");
 }
 
 /**
@@ -282,11 +322,11 @@ async function handlePrivacyCallback(ctx: Context): Promise<void> {
       `• Encrypted storage (Supabase)\n` +
       `• No third-party sharing`,
     {
-      parse_mode: 'HTML',
-      reply_markup: new InlineKeyboard().text('🔙 Back to Menu', 'main_menu'),
+      parse_mode: "HTML",
+      reply_markup: new InlineKeyboard().text("🔙 Back to Menu", "main_menu"),
     }
   );
-  await ctx.answerCallbackQuery('🛡️ Privacy policy loaded');
+  await ctx.answerCallbackQuery("🛡️ Privacy policy loaded");
 }
 
 /**
@@ -296,15 +336,15 @@ async function handlePrivacyCallback(ctx: Context): Promise<void> {
  */
 async function handleOptoutCallback(ctx: Context): Promise<void> {
   const keyboard = new InlineKeyboard()
-    .text('✅ Yes, opt out', 'confirm_optout')
-    .text('❌ Cancel', 'cancel');
+    .text("✅ Yes, opt out", "confirm_optout")
+    .text("❌ Cancel", "cancel");
 
   await ctx.editMessageText(
-    '⚠️ <b>Opt Out Confirmation</b>\n\n' +
-      'Are you sure you want to opt out?\n' +
-      'Your future messages will no longer be collected.',
+    "⚠️ <b>Opt Out Confirmation</b>\n\n" +
+      "Are you sure you want to opt out?\n" +
+      "Your future messages will no longer be collected.",
     {
-      parse_mode: 'HTML',
+      parse_mode: "HTML",
       reply_markup: keyboard,
     }
   );
@@ -317,11 +357,11 @@ async function handleOptoutCallback(ctx: Context): Promise<void> {
  * @private
  */
 async function handleConfirmOptoutCallback(ctx: Context): Promise<void> {
-  const { addUserOptOut } = await import('./supabase.js');
+  const { addUserOptOut } = await import("./supabase.js");
 
   const userId = ctx.from?.id;
   if (!userId) {
-    await ctx.answerCallbackQuery('❌ Error: Could not determine user ID');
+    await ctx.answerCallbackQuery("❌ Error: Could not determine user ID");
     return;
   }
 
@@ -332,15 +372,13 @@ async function handleConfirmOptoutCallback(ctx: Context): Promise<void> {
         `You have been successfully opted out.\n` +
         `Your messages will no longer be collected.`,
       {
-        parse_mode: 'HTML',
-        reply_markup: new InlineKeyboard().text('🏠 Main Menu', 'main_menu'),
+        parse_mode: "HTML",
+        reply_markup: new InlineKeyboard().text("🏠 Main Menu", "main_menu"),
       }
     );
-    await ctx.answerCallbackQuery('✅ You have been opted out');
+    await ctx.answerCallbackQuery("✅ You have been opted out");
   } else {
-    await ctx.answerCallbackQuery(
-      '❌ Failed to opt out. Please try again.'
-    );
+    await ctx.answerCallbackQuery("❌ Failed to opt out. Please try again.");
   }
 }
 
@@ -350,12 +388,9 @@ async function handleConfirmOptoutCallback(ctx: Context): Promise<void> {
  * @private
  */
 async function handleCancelCallback(ctx: Context): Promise<void> {
-  await ctx.editMessageText(
-    '❌ Action cancelled',
-    {
-      reply_markup: new InlineKeyboard().text('🏠 Main Menu', 'main_menu'),
-    }
-  );
+  await ctx.editMessageText("❌ Action cancelled", {
+    reply_markup: new InlineKeyboard().text("🏠 Main Menu", "main_menu"),
+  });
   await ctx.answerCallbackQuery();
 }
 
@@ -366,14 +401,10 @@ async function handleCancelCallback(ctx: Context): Promise<void> {
  */
 async function handleMainMenuCallback(ctx: Context): Promise<void> {
   const keyboard = getMainMenuKeyboard();
-  await ctx.editMessageText(
-    `🤖 <b>Main Menu</b>\n\n` +
-      `Choose an option:`,
-    {
-      parse_mode: 'HTML',
-      reply_markup: keyboard,
-    }
-  );
+  await ctx.editMessageText(`🤖 <b>Main Menu</b>\n\n` + `Choose an option:`, {
+    parse_mode: "HTML",
+    reply_markup: keyboard,
+  });
   await ctx.answerCallbackQuery();
 }
 
@@ -384,15 +415,15 @@ async function handleMainMenuCallback(ctx: Context): Promise<void> {
  */
 async function handleClearChatsCallback(ctx: Context): Promise<void> {
   const keyboard = new InlineKeyboard()
-    .text('✅ Yes, clear all', 'confirm_clear_chats')
-    .text('❌ Cancel', 'cancel');
+    .text("✅ Yes, clear all", "confirm_clear_chats")
+    .text("❌ Cancel", "cancel");
 
   await ctx.editMessageText(
-    '⚠️ <b>Clear Chats Confirmation</b>\n\n' +
-      'Are you sure you want to clear all your chat history?\n' +
-      'This action cannot be undone.',
+    "⚠️ <b>Clear Chats Confirmation</b>\n\n" +
+      "Are you sure you want to clear all your chat history?\n" +
+      "This action cannot be undone.",
     {
-      parse_mode: 'HTML',
+      parse_mode: "HTML",
       reply_markup: keyboard,
     }
   );
@@ -405,11 +436,11 @@ async function handleClearChatsCallback(ctx: Context): Promise<void> {
  * @private
  */
 async function handleConfirmClearChatsCallback(ctx: Context): Promise<void> {
-  const { clearUserMessages } = await import('./supabase.js');
+  const { clearUserMessages } = await import("./supabase.js");
 
   const userId = ctx.from?.id;
   if (!userId) {
-    await ctx.answerCallbackQuery('❌ Error: Could not determine user ID');
+    await ctx.answerCallbackQuery("❌ Error: Could not determine user ID");
     return;
   }
 
@@ -418,9 +449,9 @@ async function handleConfirmClearChatsCallback(ctx: Context): Promise<void> {
     `✅ <b>Chats Cleared</b>\n\n` +
       `Successfully deleted ${deletedCount} message(s) from your chat history.`,
     {
-      parse_mode: 'HTML',
-      reply_markup: new InlineKeyboard().text('🏠 Main Menu', 'main_menu'),
+      parse_mode: "HTML",
+      reply_markup: new InlineKeyboard().text("🏠 Main Menu", "main_menu"),
     }
   );
-  await ctx.answerCallbackQuery('✅ Chat history cleared');
+  await ctx.answerCallbackQuery("✅ Chat history cleared");
 }
