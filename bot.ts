@@ -49,6 +49,20 @@ bot.command('start', handleStartCommand);
 bot.command('optout', handleOptoutCommand);
 bot.command('stats', handleStatsCommand);
 bot.command('ask', handleAskCommand);
+bot.hears(/^\/ask\b/, handleAskCommand);
+
+// Catch-all message logger for debugging
+bot.on('message', (ctx: Context, next) => {
+  logger.debug(`[CATCH-ALL] Received message:`, {
+    chatType: ctx.chat?.type,
+    chatId: ctx.chat?.id,
+    fromId: ctx.from?.id,
+    text: ctx.message?.text,
+    entities: ctx.message?.entities,
+    raw: ctx.message,
+  });
+  return next(); // Allow other handlers to process this message
+});
 
 /**
  * Register callback query handler for menu interactions
@@ -62,24 +76,29 @@ bot.on('callback_query', handleCallbackQuery);
 bot.on('message', async (ctx: Context) => {
   try {
     const message = ctx.message;
+    logger.debug(`[ASYNC] Received message:`, message);
     if (!message?.text) {
+      logger.debug('[ASYNC] No text in message, skipping.');
       return;
     }
 
     const user = ctx.from;
     if (!user) {
+      logger.debug('[ASYNC] No user in message, skipping.');
       return;
     }
 
     // Check if user has opted out
     const optedOut = await isUserOptedOut(user.id);
+    logger.debug(`[ASYNC] User ${user.id} optedOut: ${optedOut}`);
     if (optedOut) {
-      logger.debug(`User ${user.id} is opted out, skipping message.`);
+      logger.debug(`[ASYNC] User ${user.id} is opted out, skipping message.`);
       return;
     }
 
     const chatId = ctx.chat?.id;
     if (!chatId) {
+      logger.debug('[ASYNC] No chatId, skipping.');
       return;
     }
 
@@ -94,12 +113,14 @@ bot.on('message', async (ctx: Context) => {
       userFirstName: user.first_name,
       userLastName: user.last_name,
     };
+    logger.debug('[ASYNC] Parsed TelegramMessage:', telegramMessage);
 
     // Generate embedding if available
     let vector: number[] | null = null;
     if (areEmbeddingsAvailable()) {
       const embeddingResult = await generateEmbedding(message.text);
       vector = embeddingResult.embedding;
+      logger.debug('[ASYNC] Generated embedding:', vector);
     }
 
     // Prepare database record
@@ -114,9 +135,11 @@ bot.on('message', async (ctx: Context) => {
       user_first_name: telegramMessage.userFirstName,
       user_last_name: telegramMessage.userLastName,
     };
+    logger.debug('[ASYNC] Prepared dbRecord:', dbRecord);
 
     // Store in database
-    await insertMessage(dbRecord);
+    const result = await insertMessage(dbRecord);
+    logger.debug('[ASYNC] insertMessage result:', result);
   } catch (error) {
     logger.error('Error processing message:', error);
   }

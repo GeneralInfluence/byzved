@@ -8,29 +8,38 @@ export async function handleAskCommand(ctx: Context): Promise<void> {
   try {
     // Only allow in private chats
     if (ctx.chat.type !== 'private') {
+      logger.debug(`[ASK] Rejected: not private chat. chat.type=${ctx.chat.type}`);
       await ctx.reply('❌ Please use this command in a private chat with the bot.');
       return;
     }
 
     const text = ctx.message?.text || '';
-    const match = text.match(/^\/ask\s+(\d+)\s+(.+)/);
+    logger.debug(`[ASK] Received text: '${text}'`);
+    // Accepts: /ask <group_id> <question> (robust to extra spaces)
+    // const match = text.match(/^\/ask\s+(\d{5,})\s+([\s\S]+)/i);
+    const match = text.match(/^\/ask\s+(-?\d+)\s+([\s\S]+)/i);
     if (!match) {
+      logger.debug(`[ASK] Regex did not match. text='${text}'`);
       await ctx.reply('Usage: /ask <group_id> <your question>');
       return;
     }
     const groupId = parseInt(match[1], 10);
-    const userQuestion = match[2];
+    const userQuestion = match[2].trim();
+    logger.debug(`[ASK] groupId=${groupId}, userQuestion='${userQuestion}'`);
 
     // Fetch recent messages from the group/channel
     const messages = await fetchMessages({ groupId, limit: 20 });
     if (!messages.length) {
+      logger.debug(`[ASK] No messages found for groupId=${groupId}`);
       await ctx.reply('No messages found for that group/channel.');
       return;
     }
 
     // Build prompt and query OpenAI
     const prompt = buildOpenAIPrompt(messages, userQuestion);
+    logger.debug(`[ASK] Built prompt: ${prompt}`);
     const answer = await sendPromptToOpenAI(prompt);
+    logger.debug(`[ASK] OpenAI answer: ${answer}`);
 
     await ctx.reply(answer);
   } catch (error) {
