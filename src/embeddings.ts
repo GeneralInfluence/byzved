@@ -1,4 +1,47 @@
 /**
+ * Send a prompt to OpenAI API and return the answer
+ * @param prompt The prompt string
+ * @returns The model's answer or error message
+ */
+export async function sendPromptToOpenAI(prompt: string): Promise<string> {
+  if (!openaiClient) {
+    logger.error('OpenAI client not initialized.');
+    return 'OpenAI client not initialized.';
+  }
+  try {
+    const response = await openaiClient.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant that answers questions about Telegram group data.' },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 512,
+      temperature: 0.7,
+    });
+    return response.choices[0]?.message?.content?.trim() || '';
+  } catch (error) {
+    logger.error('Error sending prompt to OpenAI:', error);
+    return 'Error communicating with OpenAI API.';
+  }
+}
+import { ConversationRecord } from './types.js';
+/**
+ * Format Telegram messages into a prompt for OpenAI
+ * @param messages Array of ConversationRecord
+ * @param userQuestion The user's question
+ * @returns Formatted prompt string
+ */
+export function buildOpenAIPrompt(messages: ConversationRecord[], userQuestion: string): string {
+  const context = messages
+    .map(msg => `[${msg.timestamp}] ${msg.user_name || msg.user_first_name || 'User'}: ${msg.text}`)
+    .join('\n');
+  return (
+    `Context:\n${context}\n\n` +
+    `Question: ${userQuestion}\n` +
+    `Answer:`
+  );
+}
+/**
  * Embeddings module for generating vector embeddings
  * Supports OpenAI and Google Gemini APIs
  * Falls back gracefully if neither API key is available

@@ -24,6 +24,7 @@ import {
   handleOptoutCommand,
   handleStatsCommand,
   handleCallbackQuery,
+  handleAskCommand,
 } from './src/handlers.js';
 import { TelegramMessage, ConversationRecord, BotConfig } from './src/types.js';
 import { logger } from './src/logger.js';
@@ -47,6 +48,7 @@ const bot = new Bot(config.telegramBotToken);
 bot.command('start', handleStartCommand);
 bot.command('optout', handleOptoutCommand);
 bot.command('stats', handleStatsCommand);
+bot.command('ask', handleAskCommand);
 
 /**
  * Register callback query handler for menu interactions

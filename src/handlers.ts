@@ -1,3 +1,44 @@
+import { fetchMessages } from './supabase.js';
+import { buildOpenAIPrompt, sendPromptToOpenAI } from './embeddings.js';
+/**
+ * Handle /ask command in private chat to answer questions about a group/channel
+ * Usage: /ask <group_id> <question>
+ */
+export async function handleAskCommand(ctx: Context): Promise<void> {
+  try {
+    // Only allow in private chats
+    if (ctx.chat.type !== 'private') {
+      await ctx.reply('❌ Please use this command in a private chat with the bot.');
+      return;
+    }
+
+    const text = ctx.message?.text || '';
+    const match = text.match(/^\/ask\s+(\d+)\s+(.+)/);
+    if (!match) {
+      await ctx.reply('Usage: /ask <group_id> <your question>');
+      return;
+    }
+    const groupId = parseInt(match[1], 10);
+    const userQuestion = match[2];
+
+    // Fetch recent messages from the group/channel
+    const messages = await fetchMessages({ groupId, limit: 20 });
+    if (!messages.length) {
+      await ctx.reply('No messages found for that group/channel.');
+      return;
+    }
+
+    // Build prompt and query OpenAI
+    const prompt = buildOpenAIPrompt(messages, userQuestion);
+    const answer = await sendPromptToOpenAI(prompt);
+
+    await ctx.reply(answer);
+  } catch (error) {
+    logger.error('Error in handleAskCommand:', error);
+    await ctx.reply('❌ An error occurred. Please try again.');
+  }
+}
+
 /**
  * Menu handlers for Telegram bot commands and interactions
  * Manages all inline keyboard callbacks and menu navigation

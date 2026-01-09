@@ -14,6 +14,33 @@ import { logger } from './logger.js';
 let supabaseClient: SupabaseClient | null = null;
 
 /**
+ * Fetch Telegram messages from the conversations table
+ * @param params Query parameters (userId, groupId, limit, since)
+ * @returns Array of ConversationRecord or empty array on error
+ */
+export async function fetchMessages(params: {
+  userId?: number;
+  groupId?: number;
+  limit?: number;
+  since?: string;
+}): Promise<ConversationRecord[]> {
+  const client = getSupabaseClient();
+  let query = client.from('conversations').select('*');
+
+  if (params.userId) query = query.eq('user_id', params.userId);
+  if (params.groupId) query = query.eq('group_id', params.groupId);
+  if (params.since) query = query.gte('timestamp', params.since);
+  if (params.limit) query = query.limit(params.limit);
+
+  const { data, error } = await query;
+  if (error) {
+    logger.error('Error fetching messages:', error);
+    return [];
+  }
+  return data as ConversationRecord[];
+}
+
+/**
  * Initialize Supabase client for database operations
  * @param url Supabase project URL
  * @param key Supabase anonymous or service role key
