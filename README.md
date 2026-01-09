@@ -75,6 +75,7 @@ byzved/
 /start   - Welcome message and bot information
 /optout  - Remove yourself from data collection
 /stats   - View ingestion statistics
+/ask     - Ask a question (private chat only)
 ```
 
 ## 💾 Database Schema
@@ -174,6 +175,42 @@ PORT=3000                               # Server port
    /optout
    ```
 
+## 📢 Adding the Bot to a Channel
+
+To ingest messages from a Telegram channel:
+
+1. **Add the bot as an admin** to your channel:
+   - Open your channel in Telegram.
+   - Go to *Channel Info* → *Administrators* → *Add Admin*.
+   - Search for your bot by username and add it.
+   - Grant at least the "Read Messages" permission.
+2. **(Optional) Set up a test message** in your channel to verify ingestion.
+
+*Note: The bot cannot read messages in private channels unless it is an admin.*
+
+## 💬 Interacting with the Bot
+
+You can interact with the bot in any group, channel, or private chat where it is present. Use the following commands:
+
+- `/start` — Get a welcome message and bot info
+- `/optout` — Remove yourself from data collection (only works in groups)
+- `/stats` — View ingestion statistics (group/channel context)
+- `/ask` — Ask a question and get a response (only in private chat)
+
+**In Channels:**
+- The bot works passively and does not respond to commands in channels, but will ingest messages if it has admin rights.
+
+**In Groups:**
+- To interact with the bot, mention it directly using its username, e.g. `/stats@YourBotUsername`.
+- The bot will reply in the group if mentioned.
+
+**In Private Chat:**
+- Send commands directly to the bot as messages.
+- The `/ask` command is only available in private chat.
+- The bot will reply with information or perform the requested action.
+
+---
+
 ## 🚀 Deployment
 
 ### Vercel (Webhook)
@@ -244,4 +281,4 @@ Feel free to open issues and PRs for improvements!
 
 ---
 
-**Built with TypeScript, Grammy.js, Supabase & OpenAI** 🚀 
+**Built with TypeScript, Grammy.js, Supabase & OpenAI** 🚀
