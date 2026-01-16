@@ -74,7 +74,7 @@ bot.on('message', (ctx: Context, next) => {
 bot.on('message', async (ctx, next) => {
   // Handle @mention
   if (
-    (ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup' || ctx.chat?.type === 'channel') &&
+    (ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup') &&
     ctx.message?.entities?.some(
       (e) =>
         e.type === 'mention' &&

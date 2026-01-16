@@ -7,9 +7,9 @@ import { buildOpenAIPrompt, sendPromptToOpenAI } from "./embeddings.js";
 export async function handleAskCommand(ctx: Context): Promise<void> {
   try {
     // Only allow in private chats
-    if (ctx.chat.type !== "private") {
+    if (!ctx.chat || ctx.chat.type !== "private") {
       logger.debug(
-        `[ASK] Rejected: not private chat. chat.type=${ctx.chat.type}`
+        `[ASK] Rejected: not private chat. chat.type=${ctx.chat?.type}`
       );
       await ctx.reply(
         "❌ Please use this command in a private chat with the bot."
@@ -56,7 +56,7 @@ export async function handleAskCommand(ctx: Context): Promise<void> {
 export async function handleMentionAsk(ctx: Context): Promise<void> {
   try {
     // Only allow in group/channel/supergroup
-    if (!['group', 'supergroup', 'channel'].includes(ctx.chat.type)) {
+    if (!ctx.chat || !['group', 'supergroup', 'channel'].includes(ctx.chat.type)) {
       return;
     }
     const text = ctx.message?.text || "";
