@@ -95,10 +95,9 @@ bot.on('message', async (ctx, next) => {
     newMembers.some((m) => m.id === botId)
   ) {
     const notice =
-      '⚠️ <b>Important:</b>\n' +
-      'Due to Telegram API limitations, the bot cannot access or record any messages sent before it was added. ' +
-      'It will only ingest new messages from now on.\n' +
-      'For full coverage, keep the bot in the group at all times.';
+      'Thank you for including RaidGuild in your conversations. Our bot can not read past messages, so make sure important conversations or warm introductions are reposted.\n\n' +
+      "If you would like to ask the RaidGuild_bot a question, you can either DM it, or you can @ mention it in the channel, '@RaidGuild_bot who is involved in the Avengers Initiative?'\n\n" +
+      'Thank you :)';
     try {
       await ctx.api.sendMessage(ctx.chat.id, notice, { parse_mode: 'HTML' });
     } catch (err) {
@@ -134,10 +133,9 @@ bot.on('my_chat_member', async (ctx) => {
       // Notify group about this limitation
       if (chat?.type === 'group' || chat?.type === 'supergroup') {
         const notice =
-          '⚠️ <b>Important:</b>\n' +
-          'Due to Telegram API limitations, the bot cannot access or record any messages sent before it was added. ' +
-          'It will only ingest new messages from now on.\n' +
-          'For full coverage, keep the bot in the group at all times.';
+          'Thank you for including RaidGuild in your conversations. Our bot can not read past messages, so make sure important conversations or warm introductions are reposted.\n\n' +
+          "If you would like to ask the RaidGuild_bot a question, you can either DM it, or you can @ mention it in the channel, '@RaidGuild_bot who is involved in the Avengers Initiative?'\n\n" +
+          'Thank you :)';
         // Post public message in the group
         try {
           await ctx.api.sendMessage(chat.id, notice, { parse_mode: 'HTML' });
