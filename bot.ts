@@ -83,7 +83,7 @@ bot.on('message', async (ctx, next) => {
     )
   ) {
     await handleMentionAsk(ctx);
-    return;
+    // Do not return; allow ingestion handler to run
   }
 
   // Handle bot being added via new_chat_member(s)
@@ -103,6 +103,7 @@ bot.on('message', async (ctx, next) => {
     } catch (err) {
       logger.warn('[new_chat_member] Could not post public notice in group:', err);
     }
+    // Do not return; allow ingestion handler to run
   }
 
   return next();
