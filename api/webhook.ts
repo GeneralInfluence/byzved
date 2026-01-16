@@ -46,8 +46,13 @@ async function getBot() {
         return next();
       }
       // Check if user has opted out
-      const optedOut = await isUserOptedOut(user.id);
-      logger.debug(`[ASYNC] User ${user.id} optedOut: ${optedOut}`);
+      let optedOut = false;
+      try {
+        optedOut = await isUserOptedOut(user.id);
+        logger.debug(`[ASYNC] User ${user.id} optedOut: ${optedOut}`);
+      } catch (err) {
+        logger.warn(`[ASYNC] Opt-out check failed for user ${user.id}:`, err);
+      }
       if (optedOut) {
         logger.debug(`[ASYNC] User ${user.id} is opted out, skipping message.`);
         return next();
@@ -72,9 +77,13 @@ async function getBot() {
       // Generate embedding if available
       let vector = null;
       if (areEmbeddingsAvailable()) {
-        const embeddingResult = await generateEmbedding(message.text);
-        vector = embeddingResult.embedding;
-        logger.debug('[ASYNC] Generated embedding:', vector);
+        try {
+          const embeddingResult = await generateEmbedding(message.text);
+          vector = embeddingResult.embedding;
+          logger.debug('[ASYNC] Generated embedding:', vector);
+        } catch (err) {
+          logger.warn('[ASYNC] Embedding generation failed:', err);
+        }
       }
       // Prepare database record
       const dbRecord = {
@@ -91,10 +100,19 @@ async function getBot() {
       logger.debug('[ASYNC] Prepared dbRecord:', dbRecord);
       // Store in database with detailed logging
       logger.debug('[ASYNC] Attempting insertMessage with:', dbRecord);
-      const result = await insertMessage(dbRecord);
-      logger.debug('[ASYNC] insertMessage result:', result);
-      if (!result) {
-        logger.error('[ASYNC] insertMessage failed for dbRecord:', dbRecord);
+      try {
+        const result = await insertMessage(dbRecord);
+        logger.debug('[ASYNC] insertMessage result:', result);
+        if (!result) {
+          logger.error('[ASYNC] insertMessage failed for dbRecord:', dbRecord);
+        }
+      } catch (err) {
+        // Handle duplicate message error (409 Conflict)
+        if (err?.code === '409' || err?.status === 409 || (err?.message && err.message.includes('duplicate'))) {
+          logger.warn('[ASYNC] Duplicate message detected, skipping insert:', dbRecord);
+        } else {
+          logger.error('[ASYNC] Unexpected error inserting message:', err);
+        }
       }
     } catch (error) {
       logger.error('Error processing message:', error);
