@@ -24,7 +24,7 @@
     "allowSyntheticDefaultImports": true,
     "paths": {
       "@/*": ["src/*"]
-    },
+    }
   },
   "include": [
     "bot.ts",
