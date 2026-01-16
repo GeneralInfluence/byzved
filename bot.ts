@@ -185,9 +185,9 @@ bot.on('message', async (ctx: Context, next) => {
 
     // Check if user has opted out
     const optedOut = await isUserOptedOut(user.id);
-    logger.debug("[ASYNC] User ${user.id} optedOut: " + optedOut);
+    logger.debug(`[ASYNC] User ${user.id} optedOut: ${optedOut}`);
     if (optedOut) {
-      logger.debug("[ASYNC] User ${user.id} is opted out, skipping message.");
+      logger.debug(`[ASYNC] User ${user.id} is opted out, skipping message.`);
       return next();
     }
 
@@ -232,9 +232,13 @@ bot.on('message', async (ctx: Context, next) => {
     };
     logger.debug('[ASYNC] Prepared dbRecord:', dbRecord);
 
-    // Store in database
+    // Store in database with detailed logging
+    logger.debug('[ASYNC] Attempting insertMessage with:', dbRecord);
     const result = await insertMessage(dbRecord);
     logger.debug('[ASYNC] insertMessage result:', result);
+    if (!result) {
+      logger.error('[ASYNC] insertMessage failed for dbRecord:', dbRecord);
+    }
   } catch (error) {
     logger.error('Error processing message:', error);
   }
