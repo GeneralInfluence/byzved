@@ -66,10 +66,13 @@ bot.on('message', (ctx: Context, next) => {
   return next(); // Allow other handlers to process this message
 });
 
+
 /**
  * Respond to @mentions in groups/channels
+ * Also handle bot being added via new_chat_member(s) in message event
  */
 bot.on('message', async (ctx, next) => {
+  // Handle @mention
   if (
     (ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup' || ctx.chat?.type === 'channel') &&
     ctx.message?.entities?.some(
@@ -82,6 +85,27 @@ bot.on('message', async (ctx, next) => {
     await handleMentionAsk(ctx);
     return;
   }
+
+  // Handle bot being added via new_chat_member(s)
+  const botId = ctx.me?.id;
+  const newMembers = ctx.message?.new_chat_members;
+  if (
+    (ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup') &&
+    Array.isArray(newMembers) &&
+    newMembers.some((m) => m.id === botId)
+  ) {
+    const notice =
+      '⚠️ <b>Important:</b>\n' +
+      'Due to Telegram API limitations, the bot cannot access or record any messages sent before it was added. ' +
+      'It will only ingest new messages from now on.\n' +
+      'For full coverage, keep the bot in the group at all times.';
+    try {
+      await ctx.api.sendMessage(ctx.chat.id, notice, { parse_mode: 'HTML' });
+    } catch (err) {
+      logger.warn('[new_chat_member] Could not post public notice in group:', err);
+    }
+  }
+
   return next();
 });
 
@@ -89,6 +113,57 @@ bot.on('message', async (ctx, next) => {
  * Register callback query handler for menu interactions
  */
 bot.on('callback_query', handleCallbackQuery);
+
+/**
+ * Handle bot being added to a group/channel (my_chat_member event)
+ * When added, fetch recent messages and ingest them
+ */
+bot.on('my_chat_member', async (ctx) => {
+  try {
+    const chat = ctx.chat;
+    const newStatus = ctx.myChatMember?.new_chat_member?.status;
+    const oldStatus = ctx.myChatMember?.old_chat_member?.status;
+    logger.info(`[my_chat_member] Chat ${chat?.id} status changed: ${oldStatus} -> ${newStatus}`);
+
+    // Only act if bot was added (became member or admin)
+    if (['member', 'administrator'].includes(newStatus)) {
+      // Telegram API limitation: bots cannot fetch message history after being added.
+      // The bot will only ingest new messages from this point forward.
+      logger.info(`[my_chat_member] Bot added to chat ${chat?.id}. Due to Telegram API limitations, only new messages will be ingested from now on.`);
+
+      // Notify group about this limitation
+      if (chat?.type === 'group' || chat?.type === 'supergroup') {
+        const notice =
+          '⚠️ <b>Important:</b>\n' +
+          'Due to Telegram API limitations, the bot cannot access or record any messages sent before it was added. ' +
+          'It will only ingest new messages from now on.\n' +
+          'For full coverage, keep the bot in the group at all times.';
+        // Post public message in the group
+        try {
+          await ctx.api.sendMessage(chat.id, notice, { parse_mode: 'HTML' });
+        } catch (err) {
+          logger.warn('[my_chat_member] Could not post public notice in group:', err);
+        }
+        // Also try to DM admins (best effort)
+        try {
+          const admins = await ctx.api.getChatAdministrators(chat.id);
+          const adminIds = admins.map(a => a.user.id);
+          for (const adminId of adminIds) {
+            try {
+              await ctx.api.sendMessage(adminId, notice, { parse_mode: 'HTML' });
+            } catch (err) {
+              logger.warn(`[my_chat_member] Could not notify admin ${adminId}:`, err);
+            }
+          }
+        } catch (err) {
+          logger.warn('[my_chat_member] Could not fetch or notify group admins:', err);
+        }
+      }
+    }
+  } catch (error) {
+    logger.error('[my_chat_member] Error handling event:', error);
+  }
+});
 
 /**
  * Handle incoming messages
