@@ -16,9 +16,9 @@ import 'dotenv/config';
 import express, { Express, Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import { Bot, Context, webhookCallback } from 'grammy';
-import { loadConfig, getMaskedConfig } from './src/config.js';
-import { initSupabase, ensureTables, insertMessage, isUserOptedOut } from './src/supabase.js';
-import { initEmbeddings, generateEmbedding, areEmbeddingsAvailable } from './src/embeddings.js';
+import { loadConfig, getMaskedConfig } from './src/config';
+import { initSupabase, ensureTables, insertMessage, isUserOptedOut } from './src/supabase';
+import { initEmbeddings, generateEmbedding, areEmbeddingsAvailable } from './src/embeddings';
 import {
   handleStartCommand,
   handleOptoutCommand,
@@ -26,9 +26,9 @@ import {
   handleCallbackQuery,
   handleAskCommand,
   handleMentionAsk,
-} from './src/handlers.js';
-import { TelegramMessage, ConversationRecord, BotConfig } from './src/types.js';
-import { logger } from './src/logger.js';
+} from './src/handlers';
+import { TelegramMessage, ConversationRecord, BotConfig } from './src/types';
+import { logger } from './src/logger';
 
 // Load and validate configuration
 let config: BotConfig;
@@ -43,6 +43,7 @@ try {
 // Initialize Grammy bot
 const bot = new Bot(config.telegramBotToken);
 
+
 /**
  * Register command handlers
  */
@@ -54,7 +55,7 @@ bot.hears(/^\/ask\b/, handleAskCommand);
 
 // Catch-all message logger for debugging
 bot.on('message', (ctx: Context, next) => {
-  logger.debug(`[CATCH-ALL] Received message:`, {
+  logger.debug("[CATCH-ALL] Received message:", {
     chatType: ctx.chat?.type,
     chatId: ctx.chat?.id,
     fromId: ctx.from?.id,
@@ -66,6 +67,25 @@ bot.on('message', (ctx: Context, next) => {
 });
 
 /**
+ * Respond to @mentions in groups/channels
+ */
+bot.on('message', async (ctx, next) => {
+  if (
+    (ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup' || ctx.chat?.type === 'channel') &&
+    ctx.message?.entities?.some(
+      (e) =>
+        e.type === 'mention' &&
+        ctx.message.text?.substring(e.offset, e.offset + e.length).toLowerCase() ===
+          (ctx.me?.username ? `@${ctx.me.username}`.toLowerCase() : '')
+    )
+  ) {
+    await handleMentionAsk(ctx);
+    return;
+  }
+  return next();
+});
+
+/**
  * Register callback query handler for menu interactions
  */
 bot.on('callback_query', handleCallbackQuery);
@@ -74,33 +94,33 @@ bot.on('callback_query', handleCallbackQuery);
  * Handle incoming messages
  * Checks opt-out status, generates embeddings, and stores in database
  */
-bot.on('message', async (ctx: Context) => {
+bot.on('message', async (ctx: Context, next) => {
   try {
     const message = ctx.message;
-    logger.debug(`[ASYNC] Received message:`, message);
+    logger.debug("[ASYNC] Received message:", message);
     if (!message?.text) {
       logger.debug('[ASYNC] No text in message, skipping.');
-      return;
+      return next();
     }
 
     const user = ctx.from;
     if (!user) {
       logger.debug('[ASYNC] No user in message, skipping.');
-      return;
+      return next();
     }
 
     // Check if user has opted out
     const optedOut = await isUserOptedOut(user.id);
-    logger.debug(`[ASYNC] User ${user.id} optedOut: ${optedOut}`);
+    logger.debug("[ASYNC] User ${user.id} optedOut: " + optedOut);
     if (optedOut) {
-      logger.debug(`[ASYNC] User ${user.id} is opted out, skipping message.`);
-      return;
+      logger.debug("[ASYNC] User ${user.id} is opted out, skipping message.");
+      return next();
     }
 
     const chatId = ctx.chat?.id;
     if (!chatId) {
       logger.debug('[ASYNC] No chatId, skipping.');
-      return;
+      return next();
     }
 
     // Parse Telegram message
@@ -144,24 +164,6 @@ bot.on('message', async (ctx: Context) => {
   } catch (error) {
     logger.error('Error processing message:', error);
   }
-});
-
-/**
- * Respond to @mentions in groups/channels
- */
-bot.on('message', async (ctx, next) => {
-  if (
-    (ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup' || ctx.chat?.type === 'channel') &&
-    ctx.message?.entities?.some(
-      (e) =>
-        e.type === 'mention' &&
-        ctx.message.text?.substring(e.offset, e.offset + e.length).toLowerCase() ===
-          (ctx.me?.username ? `@${ctx.me.username}`.toLowerCase() : '')
-    )
-  ) {
-    await handleMentionAsk(ctx);
-    return;
-  }
   return next();
 });
 
@@ -195,7 +197,7 @@ async function start(): Promise<void> {
  * @private
  */
 function startWebhookMode(): void {
-  logger.info(`🚀 Starting bot in WEBHOOK mode on port ${config.port}`);
+  logger.info("Starting bot in WEBHOOK mode on port " + config.port);
 
   const app: Express = express();
   app.use(bodyParser.json());
@@ -209,8 +211,8 @@ function startWebhookMode(): void {
   app.post('/webhook', webhookCallback(bot, 'express'));
 
   const listener = app.listen(config.port, () => {
-    logger.info(`✅ Webhook server listening on port ${config.port}`);
-    logger.info(`📡 Webhook URL: ${config.webhookUrl}`);
+    logger.info("Webhook server listening on port " + config.port);
+    logger.info("Webhook URL: " + config.webhookUrl);
 
     // Register webhook with Telegram
     if (config.webhookUrl) {
@@ -240,12 +242,12 @@ function startWebhookMode(): void {
  * @private
  */
 async function startPollingMode(): Promise<void> {
-  logger.info('🚀 Starting bot in POLLING mode');
+  logger.info('Starting bot in POLLING mode');
 
   await bot.start({
     allowed_updates: ['message', 'callback_query'],
     onStart: (botInfo) => {
-      logger.info(`✅ Bot started as @${botInfo.username}`);
+      logger.info("Bot started as @ " + botInfo.username);
     },
   });
 }
