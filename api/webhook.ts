@@ -1,9 +1,9 @@
 import { Bot, webhookCallback } from 'grammy';
-import { loadConfig, getMaskedConfig } from '../src/config';
-import { initSupabase, ensureTables } from '../src/supabase';
-import { initEmbeddings } from '../src/embeddings';
-import { handleStartCommand, handleOptoutCommand, handleStatsCommand, handleCallbackQuery, handleAskCommand, handleMentionAsk } from '../src/handlers';
-import { logger } from '../src/logger';
+import { loadConfig, getMaskedConfig } from '../src/config.js';
+import { initSupabase, ensureTables } from '../src/supabase.js';
+import { initEmbeddings } from '../src/embeddings.js';
+import { handleStartCommand, handleOptoutCommand, handleStatsCommand, handleCallbackQuery, handleAskCommand, handleMentionAsk } from '../src/handlers.js';
+import { logger } from '../src/logger.js';
 
 let bot: Bot | null = null;
 
