@@ -170,6 +170,7 @@ bot.on('my_chat_member', async (ctx) => {
  */
 bot.on('message', async (ctx: Context, next) => {
   try {
+    logger.debug('[ASYNC] Ingestion handler triggered for message:', ctx.message);
     const message = ctx.message;
     logger.debug("[ASYNC] Received message:", message);
     if (!message?.text) {
