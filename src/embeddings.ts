@@ -33,12 +33,16 @@ import { ConversationRecord } from './types.js';
  */
 export function buildOpenAIPrompt(messages: ConversationRecord[], userQuestion: string): string {
   const context = messages
-    .map(msg => `[${msg.timestamp}] ${msg.user_name || msg.user_first_name || 'User'}: ${msg.text}`)
+    .map(msg => {
+      const user = msg.user_name || msg.user_first_name || 'User';
+      const group = msg.group_id ? `Group/Channel ID: ${msg.group_id}` : '';
+      return `[${msg.timestamp}] ${user} (${group}): ${msg.text}`;
+    })
     .join('\n');
   return (
-    `Context:\n${context}\n\n` +
+    `Context (recent messages with user and group info):\n${context}\n\n` +
     `Question: ${userQuestion}\n` +
-    `Answer:`
+    `Answer (reference the users and context above in your response):`
   );
 }
 /**
