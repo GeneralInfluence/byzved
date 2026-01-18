@@ -98,6 +98,14 @@ async function getBot() {
         user_last_name: telegramMessage.userLastName,
       };
       logger.debug('[ASYNC] Prepared dbRecord:', dbRecord);
+      // Extra logging for message_id and identifying info
+      logger.info('[ASYNC] Insert attempt:', {
+        message_id: dbRecord.message_id,
+        group_id: dbRecord.group_id,
+        user_id: dbRecord.user_id,
+        text: dbRecord.text,
+        timestamp: dbRecord.timestamp,
+      });
       // Store in database with detailed logging
       logger.debug('[ASYNC] Attempting insertMessage with:', dbRecord);
       try {
@@ -108,10 +116,19 @@ async function getBot() {
         }
       } catch (err) {
         // Handle duplicate message error (409 Conflict)
-        if (err?.code === '409' || err?.status === 409 || (err?.message && err.message.includes('duplicate'))) {
-          logger.warn('[ASYNC] Duplicate message detected, skipping insert:', dbRecord);
+        const errorObj = err as any;
+        const code = errorObj?.code ?? errorObj?.status ?? undefined;
+        const message = errorObj?.message ?? String(errorObj);
+        if (code === '409' || code === 409 || (message && message.includes('duplicate'))) {
+          logger.warn('[ASYNC] Duplicate message detected, skipping insert:', {
+            dbRecord,
+            error: message,
+          });
         } else {
-          logger.error('[ASYNC] Unexpected error inserting message:', err);
+          logger.error('[ASYNC] Unexpected error inserting message:', {
+            error: message,
+            dbRecord,
+          });
         }
       }
     } catch (error) {
