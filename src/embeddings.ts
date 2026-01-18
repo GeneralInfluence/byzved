@@ -35,14 +35,24 @@ export function buildOpenAIPrompt(messages: ConversationRecord[], userQuestion: 
   const context = messages
     .map(msg => {
       const user = msg.user_name || msg.user_first_name || 'User';
-      const group = msg.group_id ? `Group/Channel ID: ${msg.group_id}` : '';
-      return `[${msg.timestamp}] ${user} (${group}): ${msg.text}`;
+      // Prefer group/channel name if available, else fallback to group_id
+      let group = '';
+      if ((msg as any).group_title) {
+        group = `Group: ${(msg as any).group_title}`;
+      } else if ((msg as any).chat_title) {
+        group = `Group: ${(msg as any).chat_title}`;
+      } else if ((msg as any).group_name) {
+        group = `Group: ${(msg as any).group_name}`;
+      } else if (msg.group_id) {
+        group = `Group ID: ${msg.group_id}`;
+      }
+      return `[${msg.timestamp}] ${user}${group ? ' (' + group + ')' : ''}: ${msg.text}`;
     })
     .join('\n');
   return (
     `Context (recent messages with user and group info):\n${context}\n\n` +
     `Question: ${userQuestion}\n` +
-    `Answer (reference the users and context above in your response):`
+    `Answer (reference the users and group names above in your response):`
   );
 }
 /**
